@@ -24,7 +24,6 @@ export default function RootLayout({
           type="text/css"
           rel="stylesheet"
         />
-        <link href="/macos-demo/index.css" type="text/css" rel="stylesheet" />
       </head>
       <body suppressHydrationWarning className="m-0 h-full overflow-hidden bg-black antialiased">
         {children}

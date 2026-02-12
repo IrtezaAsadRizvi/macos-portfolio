@@ -1,3 +1,4 @@
+@import "./styles/macos-runtime.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
