@@ -7,6 +7,8 @@ import {
   FinderWindow,
   MacOSWindowsLayer,
   ProcessLauncher,
+  ReminderList,
+  ReminderWindow,
   WindowControls,
 } from "..";
 import Dock, { DEFAULT_DOCK_ITEMS, type DockItem } from "../dock/Dock";
@@ -27,8 +29,8 @@ const ASSETS = {
   nes: nesFileIcon.src,
 } as const;
 
-type AppKey = "finder" | "calculator";
-type FinderMenuKey = "file" | "view" | "go" | "window";
+type AppKey = "finder" | "calculator" | "reminders";
+type HeaderMenuKey = "file" | "view" | "go" | "window";
 
 type WindowAnimation =
   | {
@@ -47,6 +49,60 @@ type WindowAnimation =
 const OPEN_ANIMATION_MS = 420;
 const MINIMIZE_ANIMATION_MS = 520;
 const CLOSE_ANIMATION_MS = 240;
+
+const INITIAL_REMINDER_LISTS: ReminderList[] = [
+  {
+    id: "today",
+    name: "Today",
+    color: "#007aff",
+    tasks: [
+      {
+        id: "r-1",
+        text: "Call Mom",
+        checked: false,
+        section: "Morning",
+        notes: "work",
+        duePrefix: "work –",
+        dueTime: "9:00 AM",
+        scheduled: true,
+      },
+      {
+        id: "r-2",
+        text: "Clean the garage",
+        checked: false,
+        section: "Afternoon",
+        notes: "Sweep the floor\nClear out garbage\nStack boxes",
+        dueLabel: "Family – 3:00 PM   ↗ Arriving: Roman's Work",
+        scheduled: true,
+      },
+      {
+        id: "r-3",
+        text: "Feed Doc",
+        checked: false,
+        section: "Tonight",
+        duePrefix: "work –",
+        dueTime: "6:00 PM",
+        scheduled: true,
+      },
+    ],
+  },
+  {
+    id: "work",
+    name: "work",
+    color: "#ff9f0a",
+    tasks: [
+      { id: "r-4", text: "Review PR queue", checked: false, section: "Anytime" },
+      { id: "r-5", text: "Draft status report", checked: false, section: "Anytime" },
+      { id: "r-6", text: "Prepare roadmap notes", checked: false, section: "Anytime" },
+    ],
+  },
+  {
+    id: "family",
+    name: "Family",
+    color: "#34c759",
+    tasks: [{ id: "r-7", text: "Buy groceries", checked: false, section: "Anytime" }],
+  },
+];
 
 interface RuntimeWindow {
   id: string;
@@ -187,6 +243,19 @@ function createCalculatorWindow(id: string): RuntimeWindow {
   };
 }
 
+function createReminderWindow(id: string): RuntimeWindow {
+  return {
+    id,
+    app: "reminders",
+    minimized: false,
+    fullScreen: false,
+    x: 190,
+    y: 104,
+    width: 980,
+    height: 640,
+  };
+}
+
 function getAnimatedWindowStyle(windowItem: RuntimeWindow): CSSProperties | undefined {
   if (!windowItem.animation || windowItem.fullScreen) {
     return undefined;
@@ -254,6 +323,9 @@ export default function MacOSRuntime() {
   const [finderHistory, setFinderHistory] = useState<string[][]>([["User", "Desktop"]]);
   const [finderHistoryIndex, setFinderHistoryIndex] = useState(0);
   const [finderSelection, setFinderSelection] = useState<string[]>([]);
+  const [reminderLists, setReminderLists] = useState<ReminderList[]>(INITIAL_REMINDER_LISTS);
+  const [activeReminderListId, setActiveReminderListId] = useState(INITIAL_REMINDER_LISTS[0].id);
+  const [reminderDraftTitle, setReminderDraftTitle] = useState("");
   const [dragState, setDragState] = useState<{
     windowId: string;
     startX: number;
@@ -262,7 +334,8 @@ export default function MacOSRuntime() {
     originY: number;
   } | null>(null);
   const [finderSidebarVisible, setFinderSidebarVisible] = useState(true);
-  const [activeFinderMenu, setActiveFinderMenu] = useState<FinderMenuKey | null>(null);
+  const [activeHeaderMenu, setActiveHeaderMenu] = useState<HeaderMenuKey | null>(null);
+  const reminderTaskIdRef = useRef(100);
 
   const clearScheduledAnimationHandles = useCallback((windowId: string) => {
     const timeoutId = animationTimeoutsRef.current[windowId];
@@ -481,7 +554,12 @@ export default function MacOSRuntime() {
 
   const openWindowForLauncher = useCallback(
     (launcher: ProcessLauncher) => {
-      const app = launcher.key === "finder" ? "finder" : "calculator";
+      const app: AppKey =
+        launcher.key === "finder"
+          ? "finder"
+          : launcher.key === "reminders"
+            ? "reminders"
+            : "calculator";
       const origin = getDockItemCenter(app);
       const existing = windows.find((windowItem) => windowItem.app === launcher.key);
       if (existing) {
@@ -518,7 +596,12 @@ export default function MacOSRuntime() {
       }
 
       const nextId = `${launcher.key}-${idRef.current++}`;
-      const baseWindow = app === "finder" ? createFinderWindow(nextId) : createCalculatorWindow(nextId);
+      const baseWindow =
+        app === "finder"
+          ? createFinderWindow(nextId)
+          : app === "reminders"
+            ? createReminderWindow(nextId)
+            : createCalculatorWindow(nextId);
 
       setWindows((prev) => [
         ...prev,
@@ -545,17 +628,19 @@ export default function MacOSRuntime() {
   const dockItems = useMemo<DockItem[]>(
     () =>
       DEFAULT_DOCK_ITEMS.map((item) => {
-        if (item.key !== "finder") {
+        if (item.key !== "finder" && item.key !== "reminders") {
           return item;
         }
 
+        const launcherKey = item.key === "finder" ? "finder" : "reminders";
+
         return {
           ...item,
-          active: windows.some((windowItem) => windowItem.app === "finder"),
+          active: windows.some((windowItem) => windowItem.app === launcherKey),
           action: () =>
             openWindowForLauncher({
-              key: "finder",
-              icon: ASSETS.finder,
+              key: launcherKey,
+              icon: launcherKey === "finder" ? ASSETS.finder : item.icon,
             }),
         };
       }),
@@ -566,20 +651,27 @@ export default function MacOSRuntime() {
     () => [...windows].reverse().find((windowItem) => !windowItem.minimized) ?? null,
     [windows],
   );
-  const finderMenuEnabled = useMemo(
-    () => windows.some((windowItem) => windowItem.app === "finder" && !windowItem.minimized),
-    [windows],
-  );
-  const finderIsActiveApp = topVisibleWindow?.app === "finder";
+  const activeMenuApp = topVisibleWindow?.app ?? null;
+  const appMenuEnabled = activeMenuApp === "finder" || activeMenuApp === "reminders";
+  const finderMenuEnabled = activeMenuApp === "finder";
+  const remindersMenuEnabled = activeMenuApp === "reminders";
+  const activeAppLabel =
+    activeMenuApp === "reminders"
+      ? "Reminders"
+      : activeMenuApp === "calculator"
+        ? "Calculator"
+        : activeMenuApp === "finder"
+          ? "Finder"
+          : null;
 
   useEffect(() => {
-    if (!finderMenuEnabled) {
-      setActiveFinderMenu(null);
+    if (!appMenuEnabled) {
+      setActiveHeaderMenu(null);
     }
-  }, [finderMenuEnabled]);
+  }, [appMenuEnabled]);
 
   useEffect(() => {
-    if (!activeFinderMenu) {
+    if (!activeHeaderMenu) {
       return;
     }
 
@@ -589,12 +681,12 @@ export default function MacOSRuntime() {
       if (menuRoot && target && menuRoot.contains(target)) {
         return;
       }
-      setActiveFinderMenu(null);
+      setActiveHeaderMenu(null);
     };
 
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setActiveFinderMenu(null);
+        setActiveHeaderMenu(null);
       }
     };
 
@@ -604,7 +696,7 @@ export default function MacOSRuntime() {
       window.removeEventListener("mousedown", onMouseDown);
       window.removeEventListener("keydown", onEscape);
     };
-  }, [activeFinderMenu]);
+  }, [activeHeaderMenu]);
 
   const finderNav = useMemo(
     () => ({
@@ -622,41 +714,41 @@ export default function MacOSRuntime() {
     [finderPath, finderHistory, finderHistoryIndex],
   );
 
-  const closeFinderMenu = useCallback(() => setActiveFinderMenu(null), []);
+  const closeHeaderMenu = useCallback(() => setActiveHeaderMenu(null), []);
 
-  const toggleFinderMenu = useCallback(
-    (menuKey: FinderMenuKey) => {
-      if (!finderMenuEnabled) {
+  const toggleHeaderMenu = useCallback(
+    (menuKey: HeaderMenuKey) => {
+      if (!appMenuEnabled) {
         return;
       }
-      setActiveFinderMenu((prev) => (prev === menuKey ? null : menuKey));
+      setActiveHeaderMenu((prev) => (prev === menuKey ? null : menuKey));
     },
-    [finderMenuEnabled],
+    [appMenuEnabled],
   );
 
-  const hoverFinderMenu = useCallback(
-    (menuKey: FinderMenuKey) => {
-      if (!finderMenuEnabled) {
+  const hoverHeaderMenu = useCallback(
+    (menuKey: HeaderMenuKey) => {
+      if (!appMenuEnabled) {
         return;
       }
-      setActiveFinderMenu((prev) => (prev ? menuKey : prev));
+      setActiveHeaderMenu((prev) => (prev ? menuKey : prev));
     },
-    [finderMenuEnabled],
+    [appMenuEnabled],
   );
 
   const handleNewFinderWindow = useCallback(() => {
     openNewFinderWindow();
-    closeFinderMenu();
-  }, [openNewFinderWindow, closeFinderMenu]);
+    closeHeaderMenu();
+  }, [openNewFinderWindow, closeHeaderMenu]);
 
   const handleNewFolder = useCallback(() => {
-    closeFinderMenu();
-  }, [closeFinderMenu]);
+    closeHeaderMenu();
+  }, [closeHeaderMenu]);
 
   const handleToggleFinderSidebar = useCallback(() => {
     setFinderSidebarVisible((prev) => !prev);
-    closeFinderMenu();
-  }, [closeFinderMenu]);
+    closeHeaderMenu();
+  }, [closeHeaderMenu]);
 
   const handleEnclosingFolder = useCallback(() => {
     if (finderPath.length <= 1) {
@@ -664,8 +756,8 @@ export default function MacOSRuntime() {
     }
     setFinderHistory((prev) => [...prev.slice(0, finderHistoryIndex + 1), finderPath.slice(0, -1)]);
     setFinderHistoryIndex((prev) => prev + 1);
-    closeFinderMenu();
-  }, [finderHistoryIndex, finderPath, closeFinderMenu]);
+    closeHeaderMenu();
+  }, [finderHistoryIndex, finderPath, closeHeaderMenu]);
 
   const handleMinimizeFinderFromMenu = useCallback(() => {
     const target = [...windows].reverse().find(
@@ -675,8 +767,108 @@ export default function MacOSRuntime() {
       return;
     }
     minimizeWindow(target.id);
-    closeFinderMenu();
-  }, [windows, minimizeWindow, closeFinderMenu]);
+    closeHeaderMenu();
+  }, [windows, minimizeWindow, closeHeaderMenu]);
+
+  const activeReminderList = useMemo(
+    () => reminderLists.find((list) => list.id === activeReminderListId) ?? reminderLists[0],
+    [reminderLists, activeReminderListId],
+  );
+
+  const addReminderTask = useCallback(() => {
+    const text = reminderDraftTitle.trim();
+    if (!text) {
+      return;
+    }
+
+    const nextId = `r-${reminderTaskIdRef.current++}`;
+    setReminderLists((prev) =>
+      prev.map((list) =>
+        list.id === activeReminderListId
+          ? {
+              ...list,
+              tasks: [
+                ...list.tasks,
+                {
+                  id: nextId,
+                  text,
+                  checked: false,
+                  section: "Anytime",
+                },
+              ],
+            }
+          : list,
+      ),
+    );
+    setReminderDraftTitle("");
+  }, [activeReminderListId, reminderDraftTitle]);
+
+  const toggleReminderTask = useCallback(
+    (taskId: string) => {
+      setReminderLists((prev) =>
+        prev.map((list) =>
+          list.id === activeReminderListId
+            ? {
+                ...list,
+                tasks: list.tasks.map((task) =>
+                  task.id === taskId ? { ...task, checked: !task.checked } : task,
+                ),
+              }
+            : list,
+        ),
+      );
+    },
+    [activeReminderListId],
+  );
+
+  const removeReminderTask = useCallback(
+    (taskId: string) => {
+      setReminderLists((prev) =>
+        prev.map((list) =>
+          list.id === activeReminderListId
+            ? {
+                ...list,
+                tasks: list.tasks.filter((task) => task.id !== taskId),
+              }
+            : list,
+        ),
+      );
+    },
+    [activeReminderListId],
+  );
+
+  const handleNewReminderFromMenu = useCallback(() => {
+    if (reminderLists.some((list) => list.id === "today")) {
+      setActiveReminderListId("today");
+    }
+    setReminderDraftTitle("");
+    window.requestAnimationFrame(() => {
+      document.getElementById("reminder-draft-input")?.focus();
+    });
+    closeHeaderMenu();
+  }, [reminderLists, closeHeaderMenu]);
+
+  const handleCloseReminderFromMenu = useCallback(() => {
+    const target = [...windows].reverse().find(
+      (windowItem) => windowItem.app === "reminders" && !windowItem.minimized,
+    );
+    if (!target) {
+      return;
+    }
+    closeWindowAnimated(target.id);
+    closeHeaderMenu();
+  }, [windows, closeWindowAnimated, closeHeaderMenu]);
+
+  const handleMinimizeReminderFromMenu = useCallback(() => {
+    const target = [...windows].reverse().find(
+      (windowItem) => windowItem.app === "reminders" && !windowItem.minimized,
+    );
+    if (!target) {
+      return;
+    }
+    minimizeWindow(target.id);
+    closeHeaderMenu();
+  }, [windows, minimizeWindow, closeHeaderMenu]);
 
   const windowsLayer = useMemo<MacOSWindowProps[]>(
     () =>
@@ -721,6 +913,24 @@ export default function MacOSRuntime() {
                 focused={isFocused}
                 fullScreen={windowItem.fullScreen}
                 showSidebar={finderSidebarVisible}
+                windowControl={controlModel}
+              />
+            ) : null;
+
+          const remindersContent =
+            windowItem.app === "reminders" ? (
+              <ReminderWindow
+                lists={reminderLists}
+                activeListId={activeReminderList.id}
+                focused={isFocused}
+                fullScreen={windowItem.fullScreen}
+                draftTitle={reminderDraftTitle}
+                onDraftChange={setReminderDraftTitle}
+                onSelectList={setActiveReminderListId}
+                onAddTask={addReminderTask}
+                onToggleTask={toggleReminderTask}
+                onRemoveTask={removeReminderTask}
+                onClose={() => closeWindowAnimated(windowItem.id)}
                 windowControl={controlModel}
               />
             ) : null;
@@ -779,7 +989,7 @@ export default function MacOSRuntime() {
                 bringToFront(windowItem.id);
               }
             },
-            children: finderContent ?? calculatorContent,
+            children: finderContent ?? remindersContent ?? calculatorContent,
           } satisfies MacOSWindowProps;
         }),
     [
@@ -789,11 +999,17 @@ export default function MacOSRuntime() {
       finderSelection,
       finderPath,
       finderSidebarVisible,
+      reminderLists,
+      activeReminderList,
+      reminderDraftTitle,
       updateWindow,
       minimizeWindow,
       startDrag,
       closeWindowAnimated,
       bringToFront,
+      addReminderTask,
+      toggleReminderTask,
+      removeReminderTask,
     ],
   );
 
@@ -832,120 +1048,180 @@ export default function MacOSRuntime() {
                   </svg>
                 </button>
               </div>
-              <div className="app-btn">
-                <button className={cn("toggle", !finderMenuEnabled && "opacity-50")}>
-                  Finder
-                </button>
-              </div>
+              {activeAppLabel ? (
+                <div className="app-btn">
+                  <button className={cn("toggle", !appMenuEnabled && "opacity-50")}>
+                    {activeAppLabel}
+                  </button>
+                </div>
+              ) : null}
 
-              <div
-                className={cn("item-btn", activeFinderMenu === "file" && "active")}
-                onMouseEnter={() => hoverFinderMenu("file")}
-              >
-                <button
-                  className={cn("toggle", !finderMenuEnabled && "opacity-50")}
-                  disabled={!finderMenuEnabled}
-                  onClick={() => toggleFinderMenu("file")}
-                >
-                  File
-                </button>
-                {activeFinderMenu === "file" && finderMenuEnabled ? (
-                  <div className="dropdown dropdown-1xg" onMouseDown={(event) => event.stopPropagation()}>
-                    <div className="item-group">
-                      <div className="item" onClick={handleNewFinderWindow}>
-                        <div className="text">New Finder Window</div>
-                        <div className="shortcut">Opt+Cmd+N</div>
+              {finderMenuEnabled ? (
+                <>
+                  <div
+                    className={cn("item-btn", activeHeaderMenu === "file" && "active")}
+                    onMouseEnter={() => hoverHeaderMenu("file")}
+                  >
+                    <button
+                      className={cn("toggle", !finderMenuEnabled && "opacity-50")}
+                      disabled={!finderMenuEnabled}
+                      onClick={() => toggleHeaderMenu("file")}
+                    >
+                      File
+                    </button>
+                    {activeHeaderMenu === "file" && finderMenuEnabled ? (
+                      <div className="dropdown dropdown-1xg" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="item-group">
+                          <div className="item" onClick={handleNewFinderWindow}>
+                            <div className="text">New Finder Window</div>
+                            <div className="shortcut">Opt+Cmd+N</div>
+                          </div>
+                          <div className="item" onClick={handleNewFolder}>
+                            <div className="text">New Folder</div>
+                            <div className="shortcut">Shift+Cmd+N</div>
+                          </div>
+                        </div>
+                        <div className="separator" />
+                        <div className="item-group">
+                          <div className="item disabled">
+                            <div className="text">Delete</div>
+                            <div className="shortcut">Backspace</div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="item" onClick={handleNewFolder}>
-                        <div className="text">New Folder</div>
-                        <div className="shortcut">Shift+Cmd+N</div>
-                      </div>
-                    </div>
-                    <div className="separator" />
-                    <div className="item-group">
-                      <div className="item disabled">
-                        <div className="text">Delete</div>
-                        <div className="shortcut">Backspace</div>
-                      </div>
-                    </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
 
-              <div
-                className={cn("item-btn", activeFinderMenu === "view" && "active")}
-                onMouseEnter={() => hoverFinderMenu("view")}
-              >
-                <button
-                  className={cn("toggle", !finderMenuEnabled && "opacity-50")}
-                  disabled={!finderMenuEnabled}
-                  onClick={() => toggleFinderMenu("view")}
-                >
-                  View
-                </button>
-                {activeFinderMenu === "view" && finderMenuEnabled ? (
-                  <div className="dropdown dropdown-1xg" onMouseDown={(event) => event.stopPropagation()}>
-                    <div className="item-group">
-                      <div className="item" onClick={handleToggleFinderSidebar}>
-                        <div className="text">{finderSidebarVisible ? "Hide Sidebar" : "Show Sidebar"}</div>
-                        <div className="shortcut">Ctrl+Cmd+S</div>
+                  <div
+                    className={cn("item-btn", activeHeaderMenu === "view" && "active")}
+                    onMouseEnter={() => hoverHeaderMenu("view")}
+                  >
+                    <button
+                      className={cn("toggle", !finderMenuEnabled && "opacity-50")}
+                      disabled={!finderMenuEnabled}
+                      onClick={() => toggleHeaderMenu("view")}
+                    >
+                      View
+                    </button>
+                    {activeHeaderMenu === "view" && finderMenuEnabled ? (
+                      <div className="dropdown dropdown-1xg" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="item-group">
+                          <div className="item" onClick={handleToggleFinderSidebar}>
+                            <div className="text">{finderSidebarVisible ? "Hide Sidebar" : "Show Sidebar"}</div>
+                            <div className="shortcut">Ctrl+Cmd+S</div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
 
-              <div
-                className={cn("item-btn", activeFinderMenu === "go" && "active")}
-                onMouseEnter={() => hoverFinderMenu("go")}
-              >
-                <button
-                  className={cn("toggle", !finderMenuEnabled && "opacity-50")}
-                  disabled={!finderMenuEnabled}
-                  onClick={() => toggleFinderMenu("go")}
-                >
-                  Go
-                </button>
-                {activeFinderMenu === "go" && finderMenuEnabled ? (
-                  <div className="dropdown dropdown-1xg" onMouseDown={(event) => event.stopPropagation()}>
-                    <div className="item-group">
-                      <div
-                        className={cn("item", finderPath.length <= 1 && "disabled")}
-                        onClick={finderPath.length > 1 ? handleEnclosingFolder : undefined}
-                      >
-                        <div className="text">Enclosing Folder</div>
-                        <div className="shortcut">Opt+Up</div>
+                  <div
+                    className={cn("item-btn", activeHeaderMenu === "go" && "active")}
+                    onMouseEnter={() => hoverHeaderMenu("go")}
+                  >
+                    <button
+                      className={cn("toggle", !finderMenuEnabled && "opacity-50")}
+                      disabled={!finderMenuEnabled}
+                      onClick={() => toggleHeaderMenu("go")}
+                    >
+                      Go
+                    </button>
+                    {activeHeaderMenu === "go" && finderMenuEnabled ? (
+                      <div className="dropdown dropdown-1xg" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="item-group">
+                          <div
+                            className={cn("item", finderPath.length <= 1 && "disabled")}
+                            onClick={finderPath.length > 1 ? handleEnclosingFolder : undefined}
+                          >
+                            <div className="text">Enclosing Folder</div>
+                            <div className="shortcut">Opt+Up</div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
 
-              <div
-                className={cn("item-btn", activeFinderMenu === "window" && "active")}
-                onMouseEnter={() => hoverFinderMenu("window")}
-              >
-                <button
-                  className={cn("toggle", !finderMenuEnabled && "opacity-50")}
-                  disabled={!finderMenuEnabled}
-                  onClick={() => toggleFinderMenu("window")}
-                >
-                  Window
-                </button>
-                {activeFinderMenu === "window" && finderMenuEnabled ? (
-                  <div className="dropdown dropdown-1xg" onMouseDown={(event) => event.stopPropagation()}>
-                    <div className="item-group">
-                      <div
-                        className={cn("item", !finderIsActiveApp && "disabled")}
-                        onClick={finderIsActiveApp ? handleMinimizeFinderFromMenu : undefined}
-                      >
-                        <div className="text">Minimize</div>
-                        <div className="shortcut">Cmd+M</div>
+                  <div
+                    className={cn("item-btn", activeHeaderMenu === "window" && "active")}
+                    onMouseEnter={() => hoverHeaderMenu("window")}
+                  >
+                    <button
+                      className={cn("toggle", !finderMenuEnabled && "opacity-50")}
+                      disabled={!finderMenuEnabled}
+                      onClick={() => toggleHeaderMenu("window")}
+                    >
+                      Window
+                    </button>
+                    {activeHeaderMenu === "window" && finderMenuEnabled ? (
+                      <div className="dropdown dropdown-1xg" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="item-group">
+                          <div className="item" onClick={handleMinimizeFinderFromMenu}>
+                            <div className="text">Minimize</div>
+                            <div className="shortcut">Cmd+M</div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
+                </>
+              ) : null}
+
+              {remindersMenuEnabled ? (
+                <>
+                  <div
+                    className={cn("item-btn", activeHeaderMenu === "file" && "active")}
+                    onMouseEnter={() => hoverHeaderMenu("file")}
+                  >
+                    <button
+                      className={cn("toggle", !remindersMenuEnabled && "opacity-50")}
+                      disabled={!remindersMenuEnabled}
+                      onClick={() => toggleHeaderMenu("file")}
+                    >
+                      File
+                    </button>
+                    {activeHeaderMenu === "file" && remindersMenuEnabled ? (
+                      <div className="dropdown dropdown-1xg" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="item-group">
+                          <div className="item" onClick={handleNewReminderFromMenu}>
+                            <div className="text">New Reminder</div>
+                            <div className="shortcut">Cmd+N</div>
+                          </div>
+                        </div>
+                        <div className="separator" />
+                        <div className="item-group">
+                          <div className="item" onClick={handleCloseReminderFromMenu}>
+                            <div className="text">Close</div>
+                            <div className="shortcut">Cmd+W</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div
+                    className={cn("item-btn", activeHeaderMenu === "window" && "active")}
+                    onMouseEnter={() => hoverHeaderMenu("window")}
+                  >
+                    <button
+                      className={cn("toggle", !remindersMenuEnabled && "opacity-50")}
+                      disabled={!remindersMenuEnabled}
+                      onClick={() => toggleHeaderMenu("window")}
+                    >
+                      Window
+                    </button>
+                    {activeHeaderMenu === "window" && remindersMenuEnabled ? (
+                      <div className="dropdown dropdown-1xg" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="item-group">
+                          <div className="item" onClick={handleMinimizeReminderFromMenu}>
+                            <div className="text">Minimise</div>
+                            <div className="shortcut">Cmd+M</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
             </div>
             <div className="spacer" />
             <div className="right" />

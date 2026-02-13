@@ -150,7 +150,7 @@ export default function Dock({
   const handleItemClick = (item: DockItem) => {
     const action = item.action ?? (item.key === "finder" ? onOpenFinder : undefined);
 
-    if (item.key === "finder" && !item.active && action) {
+    if (!item.active && action) {
       triggerLaunchAnimation(item.key);
     }
 
@@ -187,7 +187,7 @@ export default function Dock({
               onAnimationEnd={() => clearLaunchAnimation(item.key)}
               onMouseEnter={() => setHoveredIndex(index)}
             >
-              <div className="invisible absolute -top-[70px] flex h-[30px] items-center justify-center rounded bg-black/50 px-[15px] text-[14px] text-white/90 opacity-0 transition-all duration-300 ease-out group-hover:visible group-hover:opacity-100">
+              <div className="invisible absolute -top-[50px] flex h-[24px] items-center justify-center rounded-md bg-black/30 px-[6px] text-[14px] text-white/90 opacity-0 transition-all duration-300 ease-out group-hover:visible group-hover:opacity-100">
                 {item.name}
                 <span className="absolute -bottom-[10px] h-0 w-0 border-x-[10px] border-x-transparent border-t-[10px] border-t-black/50" />
               </div>
