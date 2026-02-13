@@ -177,6 +177,7 @@ export default function Dock({
           return (
             <li
               key={item.key}
+              data-dock-item-key={item.key}
               className={cn(
                 "group relative flex h-[50px] w-[50px] list-none items-center justify-center align-bottom transition-all duration-350 ease-[cubic-bezier(0.22,0.85,0.22,1)] hover:mx-[13px]",
                 item.isBin && "ml-5 border-l-[1.5px] border-white/40 pl-2.5",

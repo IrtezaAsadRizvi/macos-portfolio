@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "../shared/utils";
 
 type WindowShadow = "big" | "normal" | "none" | "short";
@@ -14,6 +14,8 @@ export interface MacOSWindowProps {
   fullScreen?: boolean;
   inert?: boolean;
   hidden?: boolean;
+  className?: string;
+  windowStyle?: CSSProperties;
   children: ReactNode;
   onMouseDown?: () => void;
 }
@@ -29,6 +31,8 @@ export function MacOSWindow({
   fullScreen = false,
   inert = false,
   hidden = false,
+  className,
+  windowStyle,
   children,
   onMouseDown,
 }: MacOSWindowProps) {
@@ -40,6 +44,7 @@ export function MacOSWindow({
           `shadow-${shadow}`,
           fullScreen && "fullScreen",
           inert && "inert",
+          className,
         )}
         style={{
           top: y,
@@ -47,6 +52,7 @@ export function MacOSWindow({
           width,
           height,
           display: hidden ? "none" : undefined,
+          ...windowStyle,
         }}
         onMouseDown={onMouseDown}
       >
