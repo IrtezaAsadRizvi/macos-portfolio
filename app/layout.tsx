@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import appIcon from "./assets/images/app-icon-32.png";
 
 export const metadata: Metadata = {
   title: "MacOS",
   description: "MacOS portfolio demo",
   icons: {
-    icon: "/macos-demo/32.png",
+    icon: appIcon.src,
   },
 };
 
@@ -15,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className="h-full" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#000000" />
         <meta httpEquiv="Permissions-Policy" content="interest-cohort=()" />

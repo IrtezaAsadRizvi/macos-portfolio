@@ -8,16 +8,21 @@ import {
   ProcessLauncher,
   WindowControls,
 } from "..";
-import Dock from "../dock/Dock";
+import Dock, { DEFAULT_DOCK_ITEMS, type DockItem } from "../dock/Dock";
 import type { MacOSWindowProps } from "../window/window-shell";
+import macosWallpaper from "../../../assets/images/macos-wallpaper.jpg";
+import finderFolderIcon from "../../../assets/images/finder-folder-icon.webp";
+import calculatorIcon from "../../../assets/images/calculator-icon.webp";
+import quicktimeIcon from "../../../assets/images/quicktime-icon.webp";
+import nesFileIcon from "../../../assets/images/nes-file-icon.ico";
 
 const ASSETS = {
-  wallpaper: "/macos-demo/40-6NYMWZ35.jpg",
-  folder: "/macos-demo/folder-icon-1-P3AYSFP5.webp",
-  finder: "/macos-demo/folder-icon-1-P3AYSFP5.webp",
-  calculator: "/macos-demo/256-J24FBRVH.webp",
-  quicktime: "/macos-demo/quicktime-FPM2YF42.webp",
-  nes: "/macos-demo/nes-IO4X64P2.ico",
+  wallpaper: macosWallpaper.src,
+  folder: finderFolderIcon.src,
+  finder: finderFolderIcon.src,
+  calculator: calculatorIcon.src,
+  quicktime: quicktimeIcon.src,
+  nes: nesFileIcon.src,
 } as const;
 
 type AppKey = "finder" | "calculator";
@@ -268,6 +273,26 @@ export default function MacOSRuntime() {
     [windows, updateWindow, bringToFront],
   );
 
+  const dockItems = useMemo<DockItem[]>(
+    () =>
+      DEFAULT_DOCK_ITEMS.map((item) => {
+        if (item.key !== "finder") {
+          return item;
+        }
+
+        return {
+          ...item,
+          active: windows.some((windowItem) => windowItem.app === "finder"),
+          action: () =>
+            openWindowForLauncher({
+              key: "finder",
+              icon: ASSETS.finder,
+            }),
+        };
+      }),
+    [windows, openWindowForLauncher],
+  );
+
   const finderNav = useMemo(
     () => ({
       value: { path: finderPath },
@@ -422,15 +447,7 @@ export default function MacOSRuntime() {
         </div>
 
         <MacOSWindowsLayer windows={windowsLayer} />
-        <Dock
-          onOpenFinder={() =>
-            openWindowForLauncher({
-              key: "finder",
-              icon: ASSETS.finder,
-            })
-          }
-          zIndex={200}
-        />
+        <Dock items={dockItems} zIndex={200} />
       </div>
     </main>
   );

@@ -2,3 +2,33 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes dock-launch-bounce {
+  0% {
+    transform: translateY(0);
+  }
+  22% {
+    transform: translateY(-12px);
+  }
+  46% {
+    transform: translateY(0);
+  }
+  64% {
+    transform: translateY(-6px);
+  }
+  82% {
+    transform: translateY(0);
+  }
+  92% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.dock-launch-bounce {
+  animation-name: dock-launch-bounce;
+  animation-duration: 920ms;
+  animation-timing-function: cubic-bezier(0.2, 0.82, 0.2, 1);
+}

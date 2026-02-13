@@ -1,11 +1,13 @@
 import { FinderNavModel } from "../shared/types";
+import chevronLeftIcon from "../../../assets/images/chevron-left.webp";
+import chevronRightIcon from "../../../assets/images/chevron-right.webp";
 
 interface FinderHeaderControlsProps {
   nav: FinderNavModel;
 }
 
-const LEFT_ICON = "/macos-demo/chevron-left-V36SDOWO.webp";
-const RIGHT_ICON = "/macos-demo/chevron-right-54HL462P.webp";
+const LEFT_ICON = chevronLeftIcon.src;
+const RIGHT_ICON = chevronRightIcon.src;
 
 export function FinderHeaderControls({ nav }: FinderHeaderControlsProps) {
   const title = nav.value.path[nav.value.path.length - 1] ?? "Macintosh HD";

@@ -9,6 +9,7 @@ export interface DockItem {
   icon: string;
   active?: boolean;
   isBin?: boolean;
+  action?: () => void;
 }
 
 interface DockProps {
@@ -19,7 +20,7 @@ interface DockProps {
   zIndex?: number;
 }
 
-const DEFAULT_DOCK_ITEMS: DockItem[] = [
+export const DEFAULT_DOCK_ITEMS: DockItem[] = [
   {
     key: "finder",
     name: "Finder",
@@ -127,11 +128,33 @@ export default function Dock({
   zIndex = 200,
 }: DockProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [launchingItems, setLaunchingItems] = useState<Record<string, 1 | 2>>({});
+
+  const triggerLaunchAnimation = (key: string) => {
+    const iterations: 1 | 2 = Math.random() < 0.5 ? 1 : 2;
+    setLaunchingItems((prev) => ({ ...prev, [key]: iterations }));
+  };
+
+  const clearLaunchAnimation = (key: string) => {
+    setLaunchingItems((prev) => {
+      if (!(key in prev)) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const handleItemClick = (item: DockItem) => {
-    if (item.key === "finder") {
-      onOpenFinder?.();
+    const action = item.action ?? (item.key === "finder" ? onOpenFinder : undefined);
+
+    if (item.key === "finder" && !item.active && action) {
+      triggerLaunchAnimation(item.key);
     }
+
+    action?.();
     onSelectItem?.(item);
   };
 
@@ -147,43 +170,51 @@ export default function Dock({
         className="flex h-full items-center justify-center rounded-2xl border border-white/20 bg-[rgba(83,83,83,0.25)] p-[3px] backdrop-blur-[13px]"
         onMouseLeave={() => setHoveredIndex(null)}
       >
-        {items.map((item, index) => (
-          <li
-            key={item.key}
-            className={cn(
-              "group relative flex h-[50px] w-[50px] list-none items-center justify-center align-bottom transition-all duration-200 hover:mx-[13px]",
-              item.isBin && "ml-5 border-l-[1.5px] border-white/40 pl-2.5",
-            )}
-            onMouseEnter={() => setHoveredIndex(index)}
-          >
-            <div className="invisible absolute -top-[70px] flex h-[30px] items-center justify-center rounded bg-black/50 px-[15px] text-[14px] text-white/90 opacity-0 transition-all duration-200 group-hover:visible group-hover:opacity-100">
-              {item.name}
-              <span className="absolute -bottom-[10px] h-0 w-0 border-x-[10px] border-x-transparent border-t-[10px] border-t-black/50" />
-            </div>
+        {items.map((item, index) => {
+          const launchBounceCount = launchingItems[item.key];
+          const isLaunching = launchBounceCount != null;
 
-            <button
-              type="button"
-              aria-label={item.name}
-              className="h-full w-full border-none bg-transparent p-0"
-              onClick={() => handleItemClick(item)}
+          return (
+            <li
+              key={item.key}
+              className={cn(
+                "group relative flex h-[50px] w-[50px] list-none items-center justify-center align-bottom transition-all duration-350 ease-[cubic-bezier(0.22,0.85,0.22,1)] hover:mx-[13px]",
+                item.isBin && "ml-5 border-l-[1.5px] border-white/40 pl-2.5",
+                isLaunching && "dock-launch-bounce",
+              )}
+              style={isLaunching ? { animationIterationCount: launchBounceCount } : undefined}
+              onAnimationEnd={() => clearLaunchAnimation(item.key)}
+              onMouseEnter={() => setHoveredIndex(index)}
             >
-              <img
-                className={cn(
-                  "inline-block object-cover transition-transform duration-300 ease-out",
-                  item.isBin ? "h-[94%] w-[94%] hover:ml-2.5" : "h-full w-full",
-                  getTransformClass(hoveredIndex, index),
-                )}
-                src={item.icon}
-                alt={item.name}
-                draggable={false}
-              />
-            </button>
+              <div className="invisible absolute -top-[70px] flex h-[30px] items-center justify-center rounded bg-black/50 px-[15px] text-[14px] text-white/90 opacity-0 transition-all duration-300 ease-out group-hover:visible group-hover:opacity-100">
+                {item.name}
+                <span className="absolute -bottom-[10px] h-0 w-0 border-x-[10px] border-x-transparent border-t-[10px] border-t-black/50" />
+              </div>
 
-            {item.active ? (
-              <span className="absolute bottom-[2px] h-[5px] w-[5px] rounded-full bg-white/50" />
-            ) : null}
-          </li>
-        ))}
+              <button
+                type="button"
+                aria-label={item.name}
+                className="h-full w-full border-none bg-transparent p-0"
+                onClick={() => handleItemClick(item)}
+              >
+                <img
+                  className={cn(
+                    "inline-block object-cover transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+                    item.isBin ? "h-[94%] w-[94%] hover:ml-2.5" : "h-full w-full",
+                    getTransformClass(hoveredIndex, index),
+                  )}
+                  src={item.icon}
+                  alt={item.name}
+                  draggable={false}
+                />
+              </button>
+
+              {item.active ? (
+                <span className="absolute -bottom-[5px] h-[4px] w-[4px] rounded-full bg-white/50" />
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

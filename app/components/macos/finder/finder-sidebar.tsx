@@ -1,5 +1,9 @@
 import type { FinderNavModel } from "../shared/types";
 import { areSamePath, cn } from "../shared/utils";
+import finderApplicationsIcon from "../../../assets/images/finder-applications-icon.webp";
+import finderDesktopIcon from "../../../assets/images/finder-desktop-icon.webp";
+import finderDocumentsIcon from "../../../assets/images/finder-documents-icon.webp";
+import finderDownloadsIcon from "../../../assets/images/finder-downloads-icon.webp";
 
 interface FinderFavorite {
   icon: string;
@@ -15,22 +19,22 @@ interface FinderSidebarProps {
 
 const DEFAULT_FAVORITES: FinderFavorite[] = [
   {
-    icon: "/macos-demo/applications-GLOW2Z6D.webp",
+    icon: finderApplicationsIcon.src,
     label: "Applications",
     path: ["Applications"],
   },
   {
-    icon: "/macos-demo/desktop-SU2GX57W.webp",
+    icon: finderDesktopIcon.src,
     label: "Desktop",
     path: ["User", "Desktop"],
   },
   {
-    icon: "/macos-demo/documents-UFEVYE24.webp",
+    icon: finderDocumentsIcon.src,
     label: "Documents",
     path: ["User", "Documents"],
   },
   {
-    icon: "/macos-demo/download-QGAOICMR.webp",
+    icon: finderDownloadsIcon.src,
     label: "Downloads",
     path: ["User", "Downloads"],
   },
